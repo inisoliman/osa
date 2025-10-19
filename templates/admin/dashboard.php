@@ -76,20 +76,35 @@ $stats = $dashboard->get_stats();
         </div>
     </div>
     
+    <!-- ✅ جديد: Bulk Analysis Status Section -->
+    <div class="odse-bulk-analysis-section" style="margin: 40px 0;">
+        <h2>📦 حالة التحليل الشامل للمقالات القديمة</h2>
+        
+        <div class="bulk-analysis-card" style="background: white; border: 1px solid #ddd; border-radius: 12px; padding: 30px;">
+            <div id="odse-bulk-status-container">
+                <div class="status-loading" style="text-align: center; padding: 20px;">
+                    <span class="dashicons dashicons-update" style="font-size: 32px; animation: spin 2s linear infinite;"></span>
+                    <p>جاري التحقق من الحالة...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <!-- Quick Actions -->
     <div class="odse-actions-section">
         <h2>إجراءات سريعة</h2>
         
         <div class="odse-actions-grid">
+            <!-- تحليل المقالات الجديدة -->
             <div class="action-card">
                 <h3>
                     <span class="dashicons dashicons-analytics"></span>
-                    تحليل شامل
+                    تحليل المقالات الجديدة
                 </h3>
-                <p>قم بتحليل جميع المقالات باستخدام الذكاء الاصطناعي</p>
+                <p>قم بتحليل المقالات المنشورة مؤخراً باستخدام الذكاء الاصطناعي</p>
                 <button type="button" class="button button-primary button-hero" id="odse-analyze-all">
                     <span class="dashicons dashicons-update"></span>
-                    تحليل جميع المقالات
+                    تحليل المقالات الجديدة
                 </button>
                 <div id="odse-analyze-progress" style="display:none; margin-top: 15px;">
                     <div class="progress-bar">
@@ -99,6 +114,29 @@ $stats = $dashboard->get_stats();
                 </div>
             </div>
             
+            <!-- ✅ جديد: تحليل المقالات القديمة -->
+            <div class="action-card" style="border: 2px solid #00a32a;">
+                <h3>
+                    <span class="dashicons dashicons-backup"></span>
+                    تحليل المقالات القديمة ⭐
+                </h3>
+                <p>تحليل سريع يدوي لجميع المقالات القديمة غير المحللة</p>
+                <button type="button" class="button button-secondary button-hero" id="odse-analyze-old">
+                    <span class="dashicons dashicons-clock"></span>
+                    تحليل المقالات القديمة الآن
+                </button>
+                <div id="odse-old-progress" style="display:none; margin-top: 15px;">
+                    <div class="progress-bar">
+                        <div class="progress-bar-fill" style="width: 0%"></div>
+                    </div>
+                    <p class="progress-text">جاري التحليل...</p>
+                </div>
+                <p style="margin-top: 10px; font-size: 12px; color: #666;">
+                    💡 نصيحة: التحليل التلقائي يعمل في الخلفية، هذا الزر للإسراع فقط
+                </p>
+            </div>
+            
+            <!-- بناء الروابط -->
             <div class="action-card">
                 <h3>
                     <span class="dashicons dashicons-admin-links"></span>
@@ -111,6 +149,7 @@ $stats = $dashboard->get_stats();
                 </button>
             </div>
             
+            <!-- كشف التنافس -->
             <div class="action-card">
                 <h3>
                     <span class="dashicons dashicons-search"></span>
@@ -222,3 +261,56 @@ $stats = $dashboard->get_stats();
         </div>
     </div>
 </div>
+
+<style>
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.bulk-status-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin: 20px 0;
+}
+
+.bulk-status-box {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.bulk-status-box h3 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: #666;
+}
+
+.bulk-status-box .number {
+    font-size: 32px;
+    font-weight: bold;
+    color: #2271b1;
+}
+
+.bulk-progress-bar {
+    width: 100%;
+    height: 40px;
+    background: #f0f0f0;
+    border-radius: 20px;
+    overflow: hidden;
+    margin: 20px 0;
+}
+
+.bulk-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #2271b1 0%, #00a32a 100%);
+    transition: width 0.5s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+}
+</style>
