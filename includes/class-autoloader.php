@@ -1,18 +1,42 @@
 <?php
 namespace OrsozoxDivineSEO;
 
+/**
+ * Autoloader Class
+ * Automatically loads classes based on namespace
+ */
 class Autoloader {
+    
+    /**
+     * Register autoloader
+     */
     public static function register() {
         spl_autoload_register([__CLASS__, 'autoload']);
     }
     
+    /**
+     * Autoload classes
+     * 
+     * @param string $class Full class name with namespace
+     */
     public static function autoload($class) {
+        // Check if class belongs to our namespace
         $prefix = 'OrsozoxDivineSEO\\';
-        if (strncmp($prefix, $class, strlen($prefix)) !== 0) return;
+        $len = strlen($prefix);
         
-        $relative = substr($class, strlen($prefix));
-        $file = ODSE_PLUGIN_DIR . 'includes/' . str_replace('\\', '/', $relative) . '.php';
+        if (strncmp($prefix, $class, $len) !== 0) {
+            return;
+        }
         
-        if (file_exists($file)) require_once $file;
+        // Get relative class name
+        $relative_class = substr($class, $len);
+        
+        // Convert namespace to file path
+        $file = ODSE_PLUGIN_DIR . 'includes/' . str_replace('\\', '/', $relative_class) . '.php';
+        
+        // Load class file if exists
+        if (file_exists($file)) {
+            require_once $file;
+        }
     }
 }
