@@ -1,0 +1,38 @@
+/* ===================================
+   Orsozox Divine SEO - Frontend Styles
+   =================================== */
+
+/* Auto-generated Internal Links */
+.odse-auto-link {
+    color: #2271b1;
+    text-decoration: none;
+    border-bottom: 1px dotted #2271b1;
+    transition: all 0.3s ease;
+}
+
+.odse-auto-link:hover {
+    color: #135e96;
+    border-bottom-style: solid;
+}
+
+/* High priority links */
+.odse-auto-link[data-priority="high"] {
+    font-weight: 600;
+    color: #00a32a;
+    border-bottom-color: #00a32a;
+}
+
+/* Medium priority links */
+.odse-auto-link[data-priority="medium"] {
+    color: #2271b1;
+}
+
+/* Low priority links */
+.odse-auto-link[data-priority="low"] {
+    color: #72aee6;
+}
+
+/* RTL Support */
+[dir="rtl"] .odse-auto-link {
+    direction: rtl;
+}
