@@ -141,7 +141,13 @@ class Activator {
             }
         }
         
-        // Schedule cron jobs
+        // ✅ جديد: جدولة تحليل المقالات القديمة تلقائياً
+        if (!wp_next_scheduled('odse_initial_bulk_analysis')) {
+            // يبدأ بعد 5 دقائق من التفعيل
+            wp_schedule_single_event(time() + 300, 'odse_initial_bulk_analysis');
+        }
+        
+        // Schedule regular cron jobs
         if (!wp_next_scheduled('odse_daily_analysis')) {
             wp_schedule_event(time(), 'daily', 'odse_daily_analysis');
         }
@@ -149,6 +155,10 @@ class Activator {
         if (!wp_next_scheduled('odse_weekly_cannibalization_check')) {
             wp_schedule_event(time(), 'weekly', 'odse_weekly_cannibalization_check');
         }
+        
+        // ✅ جديد: إضافة علامة لتحليل المقالات القديمة
+        update_option('odse_bulk_analysis_needed', 1);
+        update_option('odse_bulk_analysis_offset', 0);
         
         // Flush rewrite rules
         flush_rewrite_rules();
