@@ -233,4 +233,131 @@ class AjaxHandlers {
             'count' => count($conflicts)
         ]);
     }
+
+    /**
+     * ✅ جديد: تحليل المقالات القديمة من Dashboard (زر يدوي)
+     */
+    public function analyze_old_posts() {
+        check_ajax_referer('odse_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
+        $batch_size = 5; // 5 مقالات في المرة
+        
+        // جلب المقالات القديمة غير المحللة
+        $posts = get_posts([
+            'post_type' => 'post',
+            'post_status' => 'publish',
+            'posts_per_page' => $batch_size,
+            'offset' => $offset,
+            'orderby' => 'date',
+            'order' => 'ASC', // من الأقدم للأحدث
+            'meta_query' => [
+                [
+                    'key' => '_odse_analysis',
+                    'compare' => 'NOT EXISTS'
+                ]
+            ]
+        ]);
+        
+        if (empty($posts)) {
+            // احسب إجمالي المقالات المحللة
+            global $wpdb;
+            $total_analyzed = $wpdb->get_var("
+                SELECT COUNT(DISTINCT post_id) 
+                FROM {$wpdb->postmeta} 
+                WHERE meta_key = '_odse_analysis'
+            ");
+            
+            wp_send_json_success([
+                'completed' => true,
+                'total_analyzed' => $total_analyzed,
+                'message' => '✅ تم تحليل جميع المقالات القديمة بنجاح!'
+            ]);
+        }
+        
+        $engine = new \OrsozoxDivineSEO\AI\Engine();
+        $processed = 0;
+        $post_titles = [];
+        
+        foreach ($posts as $post) {
+            $result = $engine->analyze_content($post->post_content, $post->post_title);
+            
+            if (!is_wp_error($result)) {
+                // حفظ التحليل
+                update_post_meta($post->ID, '_odse_analysis', $result);
+                
+                // حفظ في قاعدة البيانات
+                if (!empty($result['primary_keywords'])) {
+                    global $wpdb;
+                    $table = $wpdb->prefix . 'odse_post_topics';
+                    
+                    // حذف القديم
+                    $wpdb->delete($table, ['post_id' => $post->ID]);
+                    
+                    // إضافة الجديد
+                    foreach ($result['primary_keywords'] as $keyword) {
+                        $wpdb->insert($table, [
+                            'post_id' => $post->ID,
+                            'topic_name' => $keyword,
+                            'topic_slug' => sanitize_title($keyword),
+                            'is_primary' => 1,
+                            'confidence_score' => 0.90
+                        ]);
+                    }
+                }
+                
+                $processed++;
+                $post_titles[] = $post->post_title;
+            }
+            
+            // تأخير صغير
+            usleep(500000); // 0.5 ثانية
+        }
+        
+        wp_send_json_success([
+            'completed' => false,
+            'processed' => $processed,
+            'offset' => $offset + $batch_size,
+            'message' => sprintf('تم تحليل %d مقالات... (%s)', $offset + $processed, implode(', ', array_slice($post_titles, 0, 2))),
+            'post_titles' => $post_titles
+        ]);
+    }
+    
+    /**
+     * ✅ جديد: الحصول على حالة التحليل الشامل التلقائي
+     */
+    public function get_bulk_analysis_status() {
+        check_ajax_referer('odse_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        $status = get_option('odse_bulk_analysis_status', [
+            'status' => 'not_started',
+            'processed' => 0
+        ]);
+        
+        // احسب إجمالي المقالات غير المحللة
+        global $wpdb;
+        $remaining = $wpdb->get_var("
+            SELECT COUNT(p.ID) 
+            FROM {$wpdb->posts} p
+            LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_odse_analysis'
+            WHERE p.post_type = 'post' 
+            AND p.post_status = 'publish'
+            AND pm.post_id IS NULL
+        ");
+        
+        $status['remaining'] = intval($remaining);
+        $status['total_posts'] = wp_count_posts('post')->publish;
+        
+        wp_send_json_success($status);
+    }
+    
 }
+
