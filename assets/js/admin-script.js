@@ -332,4 +332,181 @@ jQuery(document).ready(function($) {
         $('.' + provider + '-setting').show();
     });
     
+    // ============================================
+    // ✅ جديد: عرض حالة التحليل الشامل التلقائي
+    // ============================================
+    function updateBulkAnalysisStatus() {
+        $.ajax({
+            url: odseAdmin.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'odse_get_bulk_analysis_status',
+                nonce: odseAdmin.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    const status = response.data;
+                    const container = $('#odse-bulk-status-container');
+                    
+                    let html = '';
+                    
+                    if (status.status === 'waiting_api_key') {
+                        html = `
+                            <div style="text-align: center; padding: 20px;">
+                                <span class="dashicons dashicons-admin-network" style="font-size: 64px; color: #dba617;"></span>
+                                <h3>⚠️ في انتظار API Key</h3>
+                                <p>الرجاء إدخال API Key من صفحة الإعدادات لبدء التحليل التلقائي.</p>
+                                <a href="${odseAdmin.ajaxUrl.replace('admin-ajax.php', 'admin.php?page=orsozox-divine-seo-ai')}" class="button button-primary">
+                                    إدخال API Key
+                                </a>
+                            </div>
+                        `;
+                    } else if (status.status === 'in_progress') {
+                        const percentage = Math.round((status.processed / status.total_posts) * 100);
+                        
+                        html = `
+                            <div>
+                                <h3 style="color: #2271b1; margin-top: 0;">
+                                    <span class="dashicons dashicons-update" style="animation: spin 2s linear infinite;"></span>
+                                    جاري التحليل التلقائي في الخلفية...
+                                </h3>
+                                
+                                <div class="bulk-status-info">
+                                    <div class="bulk-status-box">
+                                        <h3>تم تحليله</h3>
+                                        <div class="number" style="color: #00a32a;">${status.processed}</div>
+                                    </div>
+                                    <div class="bulk-status-box">
+                                        <h3>المتبقي</h3>
+                                        <div class="number" style="color: #dba617;">${status.remaining}</div>
+                                    </div>
+                                    <div class="bulk-status-box">
+                                        <h3>إجمالي المقالات</h3>
+                                        <div class="number">${status.total_posts}</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="bulk-progress-bar">
+                                    <div class="bulk-progress-fill" style="width: ${percentage}%;">
+                                        ${percentage}%
+                                    </div>
+                                </div>
+                                
+                                <p style="text-align: center; color: #666;">
+                                    <strong>آخر دفعة:</strong> ${status.last_batch || 0} مقالات<br>
+                                    <strong>آخر تشغيل:</strong> ${status.last_run || 'جاري...'}
+                                </p>
+                                
+                                <div style="background: #e7f3ff; padding: 15px; border-radius: 8px; margin-top: 20px;">
+                                    <p style="margin: 0;">
+                                        💡 <strong>ملاحظة:</strong> التحليل يعمل تلقائياً في الخلفية (10 مقالات كل ساعة).
+                                        لا حاجة لفعل أي شيء! أو يمكنك استخدام زر "تحليل المقالات القديمة" أدناه للإسراع.
+                                    </p>
+                                </div>
+                            </div>
+                        `;
+                        
+                        // تحديث تلقائي كل 30 ثانية
+                        setTimeout(updateBulkAnalysisStatus, 30000);
+                        
+                    } else if (status.status === 'completed') {
+                        html = `
+                            <div style="text-align: center; padding: 30px;">
+                                <span class="dashicons dashicons-yes-alt" style="font-size: 64px; color: #00a32a;"></span>
+                                <h3 style="color: #00a32a;">✅ اكتمل التحليل الشامل!</h3>
+                                <p>تم تحليل <strong>${status.total_analyzed}</strong> مقالة بنجاح.</p>
+                                <p style="color: #666; font-size: 14px;">
+                                    تاريخ الإكمال: ${status.completed_at}
+                                </p>
+                            </div>
+                        `;
+                    } else {
+                        html = `
+                            <div style="text-align: center; padding: 20px;">
+                                <span class="dashicons dashicons-info" style="font-size: 48px; color: #72aee6;"></span>
+                                <h3>لم يبدأ التحليل بعد</h3>
+                                <p>سيبدأ التحليل التلقائي خلال 5 دقائق من تفعيل الإضافة.</p>
+                            </div>
+                        `;
+                    }
+                    
+                    container.html(html);
+                }
+            }
+        });
+    }
+    
+    // تشغيل عند تحميل الصفحة
+    if ($('#odse-bulk-status-container').length > 0) {
+        updateBulkAnalysisStatus();
+    }
+    
+    // ============================================
+    // ✅ جديد: تحليل المقالات القديمة (زر يدوي)
+    // ============================================
+    $('#odse-analyze-old').on('click', function() {
+        const btn = $(this);
+        const progressDiv = $('#odse-old-progress');
+        const progressBar = progressDiv.find('.progress-bar-fill');
+        const progressText = progressDiv.find('.progress-text');
+        
+        if (!confirm('هل تريد تحليل جميع المقالات القديمة الآن؟\n\nملاحظة: التحليل التلقائي يعمل في الخلفية بالفعل، هذا الزر للإسراع فقط.')) {
+            return;
+        }
+        
+        btn.prop('disabled', true);
+        progressDiv.show();
+        progressBar.css('width', '0%').text('0%');
+        progressText.text('جاري بدء التحليل السريع...');
+        
+        let offset = 0;
+        let totalProcessed = 0;
+        
+        function analyzeOldBatch() {
+            $.ajax({
+                url: odseAdmin.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'odse_analyze_old_posts',
+                    nonce: odseAdmin.nonce,
+                    offset: offset
+                },
+                success: function(response) {
+                    if (response.success) {
+                        if (response.data.completed) {
+                            progressBar.css('width', '100%').text('100%');
+                            progressText.html('✅ ' + response.data.message + '<br><strong>إجمالي المحلل: ' + response.data.total_analyzed + '</strong>');
+                            
+                            setTimeout(function() {
+                                location.reload();
+                            }, 3000);
+                        } else {
+                            totalProcessed += response.data.processed;
+                            offset = response.data.offset;
+                            
+                            // تحديث شريط التقدم (تقديري)
+                            const progress = Math.min(95, (totalProcessed / 100) * 100);
+                            progressBar.css('width', progress + '%').text(Math.round(progress) + '%');
+                            progressText.text(response.data.message);
+                            
+                            // استمر في الدفعة التالية
+                            setTimeout(analyzeOldBatch, 1000);
+                        }
+                    } else {
+                        alert('خطأ: ' + response.data);
+                        btn.prop('disabled', false);
+                        progressDiv.hide();
+                    }
+                },
+                error: function() {
+                    alert('حدث خطأ في الاتصال');
+                    btn.prop('disabled', false);
+                    progressDiv.hide();
+                }
+            });
+        }
+        
+        analyzeOldBatch();
+    });
+    
 });
