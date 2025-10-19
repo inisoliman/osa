@@ -19,6 +19,10 @@ class AjaxHandlers {
         // Keyword actions
         add_action('wp_ajax_odse_assign_keyword', [$this, 'assign_keyword']);
         add_action('wp_ajax_odse_detect_cannibalization', [$this, 'detect_cannibalization']);
+        
+        // ✅ جديد: المقالات القديمة
+        add_action('wp_ajax_odse_analyze_old_posts', [$this, 'analyze_old_posts']);
+        add_action('wp_ajax_odse_get_bulk_analysis_status', [$this, 'get_bulk_analysis_status']);
     }
     
     /**
@@ -233,7 +237,7 @@ class AjaxHandlers {
             'count' => count($conflicts)
         ]);
     }
-
+    
     /**
      * ✅ جديد: تحليل المقالات القديمة من Dashboard (زر يدوي)
      */
@@ -358,6 +362,4 @@ class AjaxHandlers {
         
         wp_send_json_success($status);
     }
-    
 }
-
