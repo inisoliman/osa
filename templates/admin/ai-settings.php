@@ -8,6 +8,7 @@ if (isset($_POST['odse_save_settings']) && check_admin_referer('odse_settings_no
     update_option('odse_ai_model', sanitize_text_field($_POST['odse_ai_model']));
     update_option('odse_claude_api_key', sanitize_text_field($_POST['odse_claude_api_key']));
     update_option('odse_gemini_api_key', sanitize_text_field($_POST['odse_gemini_api_key']));
+    update_option('odse_groq_api_key', sanitize_text_field($_POST['odse_groq_api_key']));
     
     echo '<div class="notice notice-success"><p>تم حفظ الإعدادات بنجاح!</p></div>';
 }
@@ -41,6 +42,9 @@ $provider = get_option('odse_ai_provider', 'openai');
                             </th>
                             <td>
                                 <select name="odse_ai_provider" id="odse_ai_provider" class="regular-text">
+                                    <option value="groq" <?php selected($provider, 'groq'); ?>>
+                                        Groq (LLaMA 3.1) - مجاني وسريع جداً ⚡ (موصى به)
+                                    </option>
                                     <option value="openai" <?php selected($provider, 'openai'); ?>>
                                         OpenAI (GPT-4, GPT-4o) - الأفضل
                                     </option>
@@ -52,7 +56,29 @@ $provider = get_option('odse_ai_provider', 'openai');
                                     </option>
                                 </select>
                                 <p class="description">
-                                    اختر مزود خدمة الذكاء الاصطناعي. نوصي بـ OpenAI لأفضل نتائج.
+                                    نوصي بـ <strong>Groq</strong> (مجاني وسريع) أو <strong>OpenAI</strong> لأفضل نتائج.
+                                </p>
+                            </td>
+                        </tr>
+                        
+                        <!-- Groq Settings -->
+                        <tr class="provider-setting groq-setting" style="<?php echo $provider !== 'groq' ? 'display:none' : ''; ?>">
+                            <th scope="row">
+                                <label for="odse_groq_api_key">Groq API Key</label>
+                            </th>
+                            <td>
+                                <input type="password" 
+                                       name="odse_groq_api_key" 
+                                       id="odse_groq_api_key"
+                                       value="<?php echo esc_attr(get_option('odse_groq_api_key')); ?>" 
+                                       class="regular-text" 
+                                       placeholder="gsk_..." />
+                                <p class="description">
+                                    احصل على API Key مجاني من 
+                                    <a href="https://console.groq.com/keys" target="_blank">
+                                        Groq Console
+                                    </a>
+                                    - مجاني 100% وسريع جداً!
                                 </p>
                             </td>
                         </tr>
@@ -133,7 +159,7 @@ $provider = get_option('odse_ai_provider', 'openai');
                                        class="regular-text" />
                                 <p class="description">
                                     احصل على API Key من 
-                                    <a href="https://makersuite.google.com/app/apikey" target="_blank">
+                                    <a href="https://aistudio.google.com/app/apikey" target="_blank">
                                         Google AI Studio
                                     </a>
                                 </p>
@@ -167,19 +193,19 @@ $provider = get_option('odse_ai_provider', 'openai');
     
     <!-- Information Cards -->
     <div class="odse-info-cards">
-        <div class="info-card">
+        <div class="info-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
             <h3>💡 نصيحة</h3>
-            <p>للحصول على أفضل النتائج، استخدم OpenAI GPT-4o. يوفر أفضل دقة وسرعة في التحليل.</p>
+            <p>للحصول على أفضل النتائج مجاناً، استخدم <strong>Groq</strong>. يوفر سرعة خيالية ومجاني بالكامل!</p>
         </div>
         
-        <div class="info-card">
+        <div class="info-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
             <h3>🔒 الخصوصية</h3>
             <p>API Keys محفوظة بشكل آمن في قاعدة البيانات ولا يتم مشاركتها مع أي طرف ثالث.</p>
         </div>
         
-        <div class="info-card">
-            <h3>💰 التكلفة</h3>
-            <p>تحليل مقال واحد يكلف تقريباً $0.01 - $0.03 حسب الطول والنموذج المستخدم.</p>
+        <div class="info-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+            <h3>⚡ السرعة</h3>
+            <p>Groq أسرع من OpenAI بـ 10 مرات! مثالي لتحليل المقالات بسرعة.</p>
         </div>
     </div>
 </div>

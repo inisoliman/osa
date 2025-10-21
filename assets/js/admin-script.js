@@ -83,7 +83,6 @@ jQuery(document).ready(function($) {
                     
                     resultDiv.html(html).addClass('show');
                     
-                    // Reload page after 2 seconds
                     setTimeout(function() {
                         location.reload();
                     }, 2000);
@@ -147,12 +146,10 @@ jQuery(document).ready(function($) {
                             totalProcessed += response.data.processed;
                             offset = response.data.offset;
                             
-                            // Update progress (rough estimate)
                             const progress = Math.min(95, (totalProcessed / 100) * 100);
                             progressBar.css('width', progress + '%');
                             progressText.text(response.data.message);
                             
-                            // Continue to next batch
                             setTimeout(analyzeNextBatch, 1000);
                         }
                     } else {
@@ -271,20 +268,110 @@ jQuery(document).ready(function($) {
     });
     
     // ============================================
-    // Build Internal Links
+    // ✅ Build Internal Links (جديد - يعمل!)
     // ============================================
     $('#odse-build-links').on('click', function() {
         const btn = $(this);
         
-        if (!confirm('هل تريد بناء الروابط الداخلية بين المقالات المرتبطة؟')) {
+        if (!confirm('هل تريد بناء الروابط الداخلية بين المقالات المرتبطة؟\n\nسيتم تحليل المقالات واقتراح أفضل الروابط باستخدام الذكاء الاصطناعي.')) {
             return;
         }
         
-        btn.prop('disabled', true).html('<span class="odse-loading"></span> جاري البناء...');
+        btn.prop('disabled', true).html('<span class="dashicons dashicons-update dashicons-spin"></span> جاري بناء الروابط...');
         
-        // This would trigger a batch process similar to analyze_all
-        alert('هذه الميزة قيد التطوير');
-        btn.prop('disabled', false).html('<span class="dashicons dashicons-admin-links"></span> بناء الروابط الداخلية');
+        let offset = 0;
+        let totalLinksCreated = 0;
+        
+        function buildNextBatch() {
+            $.ajax({
+                url: odseAdmin.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'odse_build_internal_links',
+                    nonce: odseAdmin.nonce,
+                    offset: offset
+                },
+                success: function(response) {
+                    if (response.success) {
+                        if (response.data.completed) {
+                            btn.prop('disabled', false).html('<span class="dashicons dashicons-admin-links"></span> بناء الروابط الداخلية');
+                            alert('✅ تم الانتهاء!\n\nإجمالي الروابط المنشأة: ' + response.data.total_links);
+                            location.reload();
+                        } else {
+                            totalLinksCreated += response.data.links_created;
+                            offset = response.data.offset;
+                            
+                            btn.html('<span class="dashicons dashicons-update dashicons-spin"></span> ' + response.data.message);
+                            
+                            setTimeout(buildNextBatch, 1000);
+                        }
+                    } else {
+                        alert('خطأ: ' + response.data);
+                        btn.prop('disabled', false).html('<span class="dashicons dashicons-admin-links"></span> بناء الروابط الداخلية');
+                    }
+                },
+                error: function() {
+                    alert('حدث خطأ في الاتصال');
+                    btn.prop('disabled', false).html('<span class="dashicons dashicons-admin-links"></span> بناء الروابط الداخلية');
+                }
+            });
+        }
+        
+        buildNextBatch();
+    });
+    
+    // ============================================
+    // ✅ Resolve Keyword Cannibalization (جديد!)
+    // ============================================
+    $('#odse-resolve-conflicts').on('click', function() {
+        const btn = $(this);
+        
+        if (!confirm('هل تريد حل جميع التنافسات تلقائياً؟\n\n⚠️ سيقوم الذكاء الاصطناعي بـ:\n\n1. تحليل كل مجموعة متنافسة\n2. اختيار المقال الأقوى\n3. تعديل الكلمات المفتاحية للمقالات الأخرى\n\nهذا قد يستغرق بضع دقائق.')) {
+            return;
+        }
+        
+        btn.prop('disabled', true).html('<span class="dashicons dashicons-update dashicons-spin"></span> جاري حل التنافسات...');
+        
+        let offset = 0;
+        let totalResolved = 0;
+        
+        function resolveNextBatch() {
+            $.ajax({
+                url: odseAdmin.ajaxUrl,
+                type: 'POST',
+                data: {
+                    action: 'odse_resolve_cannibalization',
+                    nonce: odseAdmin.nonce,
+                    offset: offset
+                },
+                success: function(response) {
+                    if (response.success) {
+                        if (response.data.completed) {
+                            btn.prop('disabled', false).html('<span class="dashicons dashicons-yes-alt"></span> حل التنافسات تلقائياً');
+                            alert('✅ تم الانتهاء!\n\nإجمالي التنافسات المحلولة: ' + response.data.total_resolved);
+                            location.reload();
+                        } else {
+                            totalResolved += response.data.resolved;
+                            offset = response.data.offset;
+                            
+                            const percentage = Math.round((offset / response.data.total_conflicts) * 100);
+                            btn.html('<span class="dashicons dashicons-update dashicons-spin"></span> ' + response.data.message + ' (' + percentage + '%)');
+                            
+                            setTimeout(resolveNextBatch, 500);
+                        }
+                    } else {
+                        alert('خطأ: ' + response.data);
+                        btn.prop('disabled', false).html('<span class="dashicons dashicons-search"></span> حل التنافسات تلقائياً');
+                    }
+                },
+                error: function() {
+                    alert('حدث خطأ في الاتصال');
+                    btn.prop('disabled', false).html('<span class="dashicons dashicons-search"></span> حل التنافسات تلقائياً');
+                }
+            });
+        }
+        
+        resolveNextBatch();
     });
     
     // ============================================
@@ -333,7 +420,7 @@ jQuery(document).ready(function($) {
     });
     
     // ============================================
-    // ✅ جديد: عرض حالة التحليل الشامل التلقائي
+    // ✅ عرض حالة التحليل الشامل التلقائي
     // ============================================
     function updateBulkAnalysisStatus() {
         $.ajax({
@@ -406,7 +493,6 @@ jQuery(document).ready(function($) {
                             </div>
                         `;
                         
-                        // تحديث تلقائي كل 30 ثانية
                         setTimeout(updateBulkAnalysisStatus, 30000);
                         
                     } else if (status.status === 'completed') {
@@ -436,13 +522,12 @@ jQuery(document).ready(function($) {
         });
     }
     
-    // تشغيل عند تحميل الصفحة
     if ($('#odse-bulk-status-container').length > 0) {
         updateBulkAnalysisStatus();
     }
     
     // ============================================
-    // ✅ جديد: تحليل المقالات القديمة (زر يدوي)
+    // ✅ تحليل المقالات القديمة (زر يدوي)
     // ============================================
     $('#odse-analyze-old').on('click', function() {
         const btn = $(this);
@@ -484,12 +569,10 @@ jQuery(document).ready(function($) {
                             totalProcessed += response.data.processed;
                             offset = response.data.offset;
                             
-                            // تحديث شريط التقدم (تقديري)
                             const progress = Math.min(95, (totalProcessed / 100) * 100);
                             progressBar.css('width', progress + '%').text(Math.round(progress) + '%');
                             progressText.text(response.data.message);
                             
-                            // استمر في الدفعة التالية
                             setTimeout(analyzeOldBatch, 1000);
                         }
                     } else {

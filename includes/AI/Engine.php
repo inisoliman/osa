@@ -3,7 +3,7 @@ namespace OrsozoxDivineSEO\AI;
 
 /**
  * AI Engine Class
- * Handles all AI-related operations
+ * Updated October 2025 - Latest Models
  */
 class Engine {
     
@@ -26,7 +26,13 @@ class Engine {
                 break;
             case 'gemini':
                 $this->api_key = get_option('odse_gemini_api_key');
-                $this->model = 'gemini-1.5-pro';
+                // ✅ النموذج الصحيح بدون -latest
+                $this->model = 'gemini-1.5-flash-8b';
+                break;
+            case 'groq':
+                $this->api_key = get_option('odse_groq_api_key');
+                // ✅ النموذج المحدث (3.3 بدلاً من 3.1)
+                $this->model = 'llama-3.3-70b-versatile';
                 break;
         }
     }
@@ -35,7 +41,6 @@ class Engine {
      * Analyze content and extract topics, keywords, themes
      */
     public function analyze_content($content, $title = '') {
-        // Check cache first
         $cache_key = 'odse_analysis_' . md5($content . $title);
         $cached = $this->get_from_cache($cache_key);
         
@@ -52,7 +57,6 @@ class Engine {
         
         $result = $this->parse_analysis_response($response);
         
-        // Cache the result
         if (!is_wp_error($result)) {
             $this->save_to_cache($cache_key, $result, 'analysis');
         }
@@ -60,30 +64,16 @@ class Engine {
         return $result;
     }
     
-    /**
-     * Build comprehensive analysis prompt
-     */
     private function build_analysis_prompt($content, $title) {
         return sprintf(
             "أنت خبير SEO متخصص في تحليل المحتوى المسيحي الديني باللغة العربية.
 
-قم بتحليل هذا المقال وقدم:
-
-1. **الموضوع الرئيسي** (Main Topic): الموضوع الأساسي للمقال
-2. **المواضيع الفرعية** (Subtopics): 3-5 مواضيع فرعية مرتبطة
-3. **الكلمات المفتاحية الأساسية** (Primary Keywords): 3-5 كلمات رئيسية
-4. **الكلمات المفتاحية الثانوية** (Secondary Keywords): 5-10 كلمات داعمة
-5. **الثيمات الكتابية المرتبطة** (Biblical Themes): الموضوعات الروحية والكتابية
-6. **نوع المحتوى** (Content Type): (theology, spirituality, biblical_study, church_history, saints, prayers, etc.)
-7. **مستوى العمق** (Content Depth): (pillar, comprehensive, supporting, basic)
-8. **الكلمات المناسبة للربط الداخلي** (Internal Linking Keywords): كلمات يمكن استخدامها للربط
+قم بتحليل هذا المقال وقدم الإجابة بصيغة JSON فقط:
 
 **العنوان:** %s
+**المحتوى:** %s
 
-**المحتوى:**
-%s
-
-قدم الإجابة بصيغة JSON فقط بدون أي نص إضافي:
+قدم JSON فقط بدون أي نص إضافي:
 {
   \"main_topic\": \"\",
   \"subtopics\": [],
@@ -100,14 +90,10 @@ class Engine {
         );
     }
     
-    /**
-     * Clean and truncate content for AI processing
-     */
     private function clean_content($content) {
         $content = wp_strip_all_tags($content);
         $content = preg_replace('/\s+/', ' ', $content);
         
-        // Limit to 4000 characters for API efficiency
         if (strlen($content) > 4000) {
             $content = substr($content, 0, 4000) . '...';
         }
@@ -115,9 +101,6 @@ class Engine {
         return trim($content);
     }
     
-    /**
-     * Make API request based on provider
-     */
     private function make_api_request($prompt, $system_message = '') {
         if (empty($this->api_key)) {
             return new \WP_Error('no_api_key', __('No API key configured', 'orsozox-divine-seo'));
@@ -130,33 +113,23 @@ class Engine {
                 return $this->claude_request($prompt, $system_message);
             case 'gemini':
                 return $this->gemini_request($prompt, $system_message);
+            case 'groq':
+                return $this->groq_request($prompt, $system_message);
             default:
                 return new \WP_Error('invalid_provider', __('Invalid AI provider', 'orsozox-divine-seo'));
         }
     }
     
-    /**
-     * OpenAI API Request
-     */
     private function openai_request($prompt, $system_message = '') {
         $messages = [];
         
         if (!empty($system_message)) {
-            $messages[] = [
-                'role' => 'system',
-                'content' => $system_message
-            ];
+            $messages[] = ['role' => 'system', 'content' => $system_message];
         } else {
-            $messages[] = [
-                'role' => 'system',
-                'content' => 'You are an expert SEO analyst specializing in Christian religious content in Arabic. Always respond in valid JSON format.'
-            ];
+            $messages[] = ['role' => 'system', 'content' => 'You are an expert SEO analyst. Always respond in valid JSON format.'];
         }
         
-        $messages[] = [
-            'role' => 'user',
-            'content' => $prompt
-        ];
+        $messages[] = ['role' => 'user', 'content' => $prompt];
         
         $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
             'headers' => [
@@ -185,9 +158,6 @@ class Engine {
         return $body['choices'][0]['message']['content'] ?? '';
     }
     
-    /**
-     * Claude API Request  
-     */
     private function claude_request($prompt, $system_message = '') {
         $headers = [
             'x-api-key' => $this->api_key,
@@ -199,12 +169,7 @@ class Engine {
             'model' => $this->model,
             'max_tokens' => 4096,
             'temperature' => $this->temperature,
-            'messages' => [
-                [
-                    'role' => 'user',
-                    'content' => $prompt
-                ]
-            ]
+            'messages' => [['role' => 'user', 'content' => $prompt]]
         ];
         
         if (!empty($system_message)) {
@@ -231,33 +196,67 @@ class Engine {
     }
     
     /**
-     * Gemini API Request
+     * Gemini API Request - محدث أكتوبر 2025
      */
     private function gemini_request($prompt, $system_message = '') {
-        $full_prompt = $system_message ? $system_message . "\n\n" . $prompt : $prompt;
+        $full_prompt = !empty($system_message) ? $system_message . "\n\n" . $prompt : $prompt;
         
-        $response = wp_remote_post(
-            'https://generativelanguage.googleapis.com/v1beta/models/' . $this->model . ':generateContent?key=' . $this->api_key,
-            [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                ],
-                'body' => json_encode([
-                    'contents' => [
-                        [
-                            'parts' => [
-                                ['text' => $full_prompt]
-                            ]
-                        ]
-                    ],
-                    'generationConfig' => [
-                        'temperature' => $this->temperature,
-                        'maxOutputTokens' => 4096,
-                    ]
-                ]),
-                'timeout' => 60
-            ]
-        );
+        // ✅ استخدام النموذج الصحيح
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . $this->model . ':generateContent?key=' . $this->api_key;
+        
+        $response = wp_remote_post($url, [
+            'headers' => ['Content-Type' => 'application/json'],
+            'body' => json_encode([
+                'contents' => [['parts' => [['text' => $full_prompt]]]]
+            ]),
+            'timeout' => 60,
+            'sslverify' => false
+        ]);
+        
+        if (is_wp_error($response)) {
+            return $response;
+        }
+        
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        
+        if (isset($body['candidates'][0]['content']['parts'][0]['text'])) {
+            return $body['candidates'][0]['content']['parts'][0]['text'];
+        }
+        
+        if (isset($body['error']['message'])) {
+            return new \WP_Error('api_error', $body['error']['message']);
+        }
+        
+        return new \WP_Error('parse_error', 'Could not parse Gemini response');
+    }
+    
+    /**
+     * Groq API Request - محدث أكتوبر 2025
+     */
+    private function groq_request($prompt, $system_message = '') {
+        $messages = [];
+        
+        if (!empty($system_message)) {
+            $messages[] = ['role' => 'system', 'content' => $system_message];
+        } else {
+            $messages[] = ['role' => 'system', 'content' => 'You are an expert SEO analyst. Always respond in valid JSON format.'];
+        }
+        
+        $messages[] = ['role' => 'user', 'content' => $prompt];
+        
+        $response = wp_remote_post('https://api.groq.com/openai/v1/chat/completions', [
+            'headers' => [
+                'Authorization' => 'Bearer ' . $this->api_key,
+                'Content-Type' => 'application/json',
+            ],
+            'body' => json_encode([
+                'model' => $this->model, // llama-3.3-70b-versatile
+                'messages' => $messages,
+                'temperature' => $this->temperature,
+                'response_format' => ['type' => 'json_object']
+            ]),
+            'timeout' => 60
+        ]);
         
         if (is_wp_error($response)) {
             return $response;
@@ -269,12 +268,9 @@ class Engine {
             return new \WP_Error('api_error', $body['error']['message']);
         }
         
-        return $body['candidates'][0]['content']['parts'][0]['text'] ?? '';
+        return $body['choices'][0]['message']['content'] ?? '';
     }
     
-    /**
-     * Parse analysis response
-     */
     private function parse_analysis_response($response) {
         $data = json_decode($response, true);
         
@@ -285,13 +281,9 @@ class Engine {
         return $data;
     }
     
-    /**
-     * Detect keyword cannibalization
-     */
     public function detect_cannibalization() {
         global $wpdb;
         
-        // Get all posts with their focus keywords from Rank Math
         $posts = $wpdb->get_results("
             SELECT p.ID, p.post_title, pm.meta_value as focus_keyword
             FROM {$wpdb->posts} p
@@ -323,7 +315,6 @@ class Engine {
             }
         }
         
-        // Find conflicts (same keyword on multiple posts)
         foreach($keyword_map as $keyword => $posts_array) {
             if(count($posts_array) > 1) {
                 $conflicts[$keyword] = $posts_array;
@@ -333,9 +324,6 @@ class Engine {
         return $conflicts;
     }
     
-    /**
-     * Suggest internal links using AI
-     */
     public function suggest_internal_links($post_id) {
         $post = get_post($post_id);
         if(!$post) return new \WP_Error('invalid_post', __('Invalid post ID', 'orsozox-divine-seo'));
@@ -343,14 +331,12 @@ class Engine {
         $content = $post->post_content;
         $title = $post->post_title;
         
-        // Get related posts
         $related_posts = $this->find_related_posts($post_id);
         
         if (empty($related_posts)) {
             return ['suggestions' => []];
         }
         
-        // Use AI to suggest best linking strategy
         $prompt = $this->build_linking_prompt($content, $title, $related_posts);
         $response = $this->make_api_request($prompt);
         
@@ -361,20 +347,15 @@ class Engine {
         return $this->parse_linking_suggestions($response);
     }
     
-    /**
-     * Find related posts by topic
-     */
     private function find_related_posts($post_id, $limit = 15) {
         global $wpdb;
         
-        // Get post topics
         $topics = $wpdb->get_col($wpdb->prepare("
             SELECT topic_name FROM {$wpdb->prefix}odse_post_topics
             WHERE post_id = %d
         ", $post_id));
         
         if(empty($topics)) {
-            // Fallback: get posts from same category
             $categories = wp_get_post_categories($post_id);
             if (empty($categories)) {
                 return [];
@@ -389,7 +370,6 @@ class Engine {
             ]);
         }
         
-        // Find posts with similar topics
         $placeholders = implode(',', array_fill(0, count($topics), '%s'));
         $params = array_merge($topics, [$post_id, $limit]);
         
@@ -408,68 +388,26 @@ class Engine {
         return $wpdb->get_results($query);
     }
     
-    /**
-     * Build linking prompt for AI
-     */
     private function build_linking_prompt($content, $title, $related_posts) {
         $related_list = '';
         foreach($related_posts as $i => $post) {
             $excerpt = !empty($post->post_excerpt) ? $post->post_excerpt : substr(wp_strip_all_tags($post->post_content), 0, 200);
-            $related_list .= sprintf(
-                "%d. ID: %d | العنوان: %s | ملخص: %s\n",
-                ($i + 1),
-                $post->ID,
-                $post->post_title,
-                $excerpt
-            );
+            $related_list .= sprintf("%d. ID: %d | العنوان: %s\n", ($i + 1), $post->ID, $post->post_title);
         }
         
         return sprintf(
-            "أنت خبير في بناء استراتيجيات الربط الداخلي للمواقع المسيحية الدينية.
+            "اقترح 5 روابط داخلية. قدم JSON فقط:
 
-**المقال الحالي:**
 العنوان: %s
-المحتوى: %s
+المقالات: %s
 
-**المقالات المرتبطة المتاحة:**
-%s
-
-**المطلوب:**
-اقترح أفضل 5-8 روابط داخلية لهذا المقال. لكل رابط قدم:
-
-1. **post_id**: رقم المقال المستهدف
-2. **anchor_text**: نص الرابط (يجب أن يكون طبيعياً ومن كلمات موجودة فعلاً في المحتوى)
-3. **reason**: سبب اختيار هذا الرابط
-4. **priority**: (high, medium, low) حسب أهمية الرابط
-5. **placement_suggestion**: اقتراح مكان وضع الرابط في المحتوى
-
-**ملاحظات مهمة:**
-- نص الرابط (anchor_text) يجب أن يكون كلمات موجودة فعلياً في المحتوى
-- تجنب الربط الزائد (over-optimization)
-- ركز على القيمة للقارئ
-- اختر مقالات ذات صلة حقيقية
-
-قدم الإجابة بصيغة JSON:
-{
-  \"suggestions\": [
-    {
-      \"post_id\": 123,
-      \"anchor_text\": \"النص المقترح\",
-      \"reason\": \"السبب\",
-      \"priority\": \"high\",
-      \"placement_suggestion\": \"في الفقرة الثانية\"
-    }
-  ]
-}",
+JSON:
+{\"suggestions\": [{\"post_id\": 123, \"anchor_text\": \"نص\", \"reason\": \"سبب\", \"priority\": \"high\"}]}",
             $title,
-            $this->clean_content($content),
             $related_list
         );
     }
     
-    /**
-     * Parse linking suggestions
-     */
     private function parse_linking_suggestions($response) {
         $data = json_decode($response, true);
         
@@ -480,9 +418,6 @@ class Engine {
         return $data;
     }
     
-    /**
-     * Test API connection
-     */
     public function test_connection() {
         $test_prompt = "Respond with valid JSON: {\"status\":\"success\",\"message\":\"مرحباً! الاتصال ناجح\"}";
         $response = $this->make_api_request($test_prompt);
@@ -501,7 +436,6 @@ class Engine {
         ];
     }
     
-    // Cache methods
     private function get_from_cache($key) {
         global $wpdb;
         $table = $wpdb->prefix . 'odse_ai_cache';

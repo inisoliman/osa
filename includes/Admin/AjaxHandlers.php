@@ -15,12 +15,14 @@ class AjaxHandlers {
         // Linking actions
         add_action('wp_ajax_odse_suggest_links', [$this, 'suggest_links']);
         add_action('wp_ajax_odse_remove_link', [$this, 'remove_link']);
+        add_action('wp_ajax_odse_build_internal_links', [$this, 'build_internal_links']);
         
         // Keyword actions
         add_action('wp_ajax_odse_assign_keyword', [$this, 'assign_keyword']);
         add_action('wp_ajax_odse_detect_cannibalization', [$this, 'detect_cannibalization']);
+        add_action('wp_ajax_odse_resolve_cannibalization', [$this, 'resolve_cannibalization']);
         
-        // ✅ جديد: المقالات القديمة
+        // Old posts actions
         add_action('wp_ajax_odse_analyze_old_posts', [$this, 'analyze_old_posts']);
         add_action('wp_ajax_odse_get_bulk_analysis_status', [$this, 'get_bulk_analysis_status']);
     }
@@ -85,7 +87,7 @@ class AjaxHandlers {
         }
         
         $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
-        $batch_size = 5; // Process 5 posts at a time
+        $batch_size = 5;
         
         $posts = get_posts([
             'post_type' => 'post',
@@ -114,8 +116,7 @@ class AjaxHandlers {
                 $processed++;
             }
             
-            // Small delay to avoid rate limits
-            usleep(500000); // 0.5 seconds
+            usleep(500000);
         }
         
         wp_send_json_success([
@@ -201,6 +202,87 @@ class AjaxHandlers {
     }
     
     /**
+     * ✅ Build internal links for all posts
+     */
+    public function build_internal_links() {
+        check_ajax_referer('odse_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
+        $batch_size = 5;
+        
+        $posts = get_posts([
+            'post_type' => 'post',
+            'post_status' => 'publish',
+            'posts_per_page' => $batch_size,
+            'offset' => $offset,
+            'orderby' => 'date',
+            'order' => 'DESC',
+            'meta_query' => [
+                [
+                    'key' => '_odse_analysis',
+                    'compare' => 'EXISTS'
+                ]
+            ]
+        ]);
+        
+        if (empty($posts)) {
+            global $wpdb;
+            $total_links = $wpdb->get_var("
+                SELECT COUNT(*) 
+                FROM {$wpdb->prefix}odse_internal_links
+            ");
+            
+            wp_send_json_success([
+                'completed' => true,
+                'total_links' => $total_links,
+                'message' => '✅ تم بناء الروابط الداخلية بنجاح!'
+            ]);
+        }
+        
+        $engine = new \OrsozoxDivineSEO\AI\Engine();
+        $processed = 0;
+        $links_created = 0;
+        
+        foreach ($posts as $post) {
+            $result = $engine->suggest_internal_links($post->ID);
+            
+            if (!is_wp_error($result) && !empty($result['suggestions'])) {
+                global $wpdb;
+                $table = $wpdb->prefix . 'odse_internal_links';
+                
+                $wpdb->delete($table, ['source_post_id' => $post->ID]);
+                
+                foreach ($result['suggestions'] as $suggestion) {
+                    $wpdb->insert($table, [
+                        'source_post_id' => $post->ID,
+                        'target_post_id' => $suggestion['post_id'],
+                        'anchor_text' => $suggestion['anchor_text'],
+                        'priority' => $suggestion['priority'] ?? 'medium',
+                        'ai_generated' => 1
+                    ]);
+                    $links_created++;
+                }
+                
+                $processed++;
+            }
+            
+            usleep(500000);
+        }
+        
+        wp_send_json_success([
+            'completed' => false,
+            'processed' => $processed,
+            'links_created' => $links_created,
+            'offset' => $offset + $batch_size,
+            'message' => sprintf('تم معالجة %d مقالات... (إنشاء %d روابط)', $offset + $processed, $links_created)
+        ]);
+    }
+    
+    /**
      * Assign keyword to post
      */
     public function assign_keyword() {
@@ -239,7 +321,133 @@ class AjaxHandlers {
     }
     
     /**
-     * ✅ جديد: تحليل المقالات القديمة من Dashboard (زر يدوي)
+     * ✅ جديد: حل تنافس الكلمات المفتاحية تلقائياً بالـ AI
+     */
+    public function resolve_cannibalization() {
+        check_ajax_referer('odse_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
+        $batch_size = 10; // 10 تنافسات في المرة
+        
+        $engine = new \OrsozoxDivineSEO\AI\Engine();
+        $all_conflicts = $engine->detect_cannibalization();
+        
+        if (empty($all_conflicts)) {
+            wp_send_json_success([
+                'completed' => true,
+                'total_resolved' => 0,
+                'message' => '✅ لا يوجد تنافسات للحل!'
+            ]);
+        }
+        
+        // خذ دفعة من التنافسات
+        $conflicts_batch = array_slice($all_conflicts, $offset, $batch_size, true);
+        
+        if (empty($conflicts_batch)) {
+            wp_send_json_success([
+                'completed' => true,
+                'total_resolved' => $offset,
+                'message' => '✅ تم حل جميع التنافسات بنجاح!'
+            ]);
+        }
+        
+        $resolved = 0;
+        
+        foreach ($conflicts_batch as $keyword => $posts) {
+            // تحليل المقالات واختيار الأقوى
+            $best_post = $this->select_best_post_for_keyword($posts, $keyword);
+            
+            if ($best_post) {
+                // حفظ الكلمة المفتاحية للمقال الأقوى
+                update_post_meta($best_post['id'], 'rank_math_focus_keyword', $keyword);
+                
+                // تعديل الكلمات المفتاحية للمقالات الأخرى
+                foreach ($posts as $post) {
+                    if ($post['id'] != $best_post['id']) {
+                        // احذف الكلمة المتنافسة
+                        $current_keywords = get_post_meta($post['id'], 'rank_math_focus_keyword', true);
+                        $keywords_array = array_filter(array_map('trim', explode(',', $current_keywords)));
+                        
+                        // احذف الكلمة المتنافسة
+                        $keywords_array = array_filter($keywords_array, function($k) use ($keyword) {
+                            return strtolower($k) !== strtolower($keyword);
+                        });
+                        
+                        // احفظ الكلمات المتبقية
+                        update_post_meta($post['id'], 'rank_math_focus_keyword', implode(', ', $keywords_array));
+                    }
+                }
+                
+                $resolved++;
+            }
+        }
+        
+        wp_send_json_success([
+            'completed' => false,
+            'resolved' => $resolved,
+            'offset' => $offset + $batch_size,
+            'total_conflicts' => count($all_conflicts),
+            'message' => sprintf('تم حل %d تنافسات... (الإجمالي: %d / %d)', $resolved, $offset + $resolved, count($all_conflicts))
+        ]);
+    }
+    
+    /**
+     * ✅ اختيار المقال الأقوى للكلمة المفتاحية
+     */
+    private function select_best_post_for_keyword($posts, $keyword) {
+        $scores = [];
+        
+        foreach ($posts as $post) {
+            $post_obj = get_post($post['id']);
+            if (!$post_obj) continue;
+            
+            $score = 0;
+            
+            // 1. طول المحتوى (40%)
+            $content_length = strlen(wp_strip_all_tags($post_obj->post_content));
+            $score += ($content_length / 100) * 0.4;
+            
+            // 2. الكلمة في العنوان (30%)
+            if (stripos($post_obj->post_title, $keyword) !== false) {
+                $score += 30;
+            }
+            
+            // 3. تاريخ النشر - الأحدث أفضل (15%)
+            $days_old = (time() - strtotime($post_obj->post_date)) / DAY_IN_SECONDS;
+            $score += max(0, 15 - ($days_old / 30)); // كل شهر يقلل النقاط
+            
+            // 4. عدد الكلمات المفتاحية الأخرى (10%)
+            $other_keywords = get_post_meta($post['id'], 'rank_math_focus_keyword', true);
+            $keywords_count = count(array_filter(explode(',', $other_keywords)));
+            $score += max(0, 10 - $keywords_count); // الأقل كلمات أفضل
+            
+            // 5. التحليل بالـ AI (5%)
+            $analysis = get_post_meta($post['id'], '_odse_analysis', true);
+            if (!empty($analysis)) {
+                $score += 5;
+            }
+            
+            $scores[$post['id']] = [
+                'id' => $post['id'],
+                'title' => $post['title'],
+                'score' => $score
+            ];
+        }
+        
+        // رتب حسب النقاط
+        usort($scores, function($a, $b) {
+            return $b['score'] - $a['score'];
+        });
+        
+        return $scores[0] ?? null;
+    }
+    
+    /**
+     * Analyze old posts
      */
     public function analyze_old_posts() {
         check_ajax_referer('odse_nonce', 'nonce');
@@ -249,16 +457,15 @@ class AjaxHandlers {
         }
         
         $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
-        $batch_size = 5; // 5 مقالات في المرة
+        $batch_size = 5;
         
-        // جلب المقالات القديمة غير المحللة
         $posts = get_posts([
             'post_type' => 'post',
             'post_status' => 'publish',
             'posts_per_page' => $batch_size,
             'offset' => $offset,
             'orderby' => 'date',
-            'order' => 'ASC', // من الأقدم للأحدث
+            'order' => 'ASC',
             'meta_query' => [
                 [
                     'key' => '_odse_analysis',
@@ -268,7 +475,6 @@ class AjaxHandlers {
         ]);
         
         if (empty($posts)) {
-            // احسب إجمالي المقالات المحللة
             global $wpdb;
             $total_analyzed = $wpdb->get_var("
                 SELECT COUNT(DISTINCT post_id) 
@@ -291,18 +497,14 @@ class AjaxHandlers {
             $result = $engine->analyze_content($post->post_content, $post->post_title);
             
             if (!is_wp_error($result)) {
-                // حفظ التحليل
                 update_post_meta($post->ID, '_odse_analysis', $result);
                 
-                // حفظ في قاعدة البيانات
                 if (!empty($result['primary_keywords'])) {
                     global $wpdb;
                     $table = $wpdb->prefix . 'odse_post_topics';
                     
-                    // حذف القديم
                     $wpdb->delete($table, ['post_id' => $post->ID]);
                     
-                    // إضافة الجديد
                     foreach ($result['primary_keywords'] as $keyword) {
                         $wpdb->insert($table, [
                             'post_id' => $post->ID,
@@ -318,8 +520,7 @@ class AjaxHandlers {
                 $post_titles[] = $post->post_title;
             }
             
-            // تأخير صغير
-            usleep(500000); // 0.5 ثانية
+            usleep(500000);
         }
         
         wp_send_json_success([
@@ -332,7 +533,7 @@ class AjaxHandlers {
     }
     
     /**
-     * ✅ جديد: الحصول على حالة التحليل الشامل التلقائي
+     * Get bulk analysis status
      */
     public function get_bulk_analysis_status() {
         check_ajax_referer('odse_nonce', 'nonce');
@@ -346,7 +547,6 @@ class AjaxHandlers {
             'processed' => 0
         ]);
         
-        // احسب إجمالي المقالات غير المحللة
         global $wpdb;
         $remaining = $wpdb->get_var("
             SELECT COUNT(p.ID) 

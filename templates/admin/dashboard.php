@@ -76,7 +76,7 @@ $stats = $dashboard->get_stats();
         </div>
     </div>
     
-    <!-- ✅ جديد: Bulk Analysis Status Section -->
+    <!-- ✅ Bulk Analysis Status Section -->
     <div class="odse-bulk-analysis-section" style="margin: 40px 0;">
         <h2>📦 حالة التحليل الشامل للمقالات القديمة</h2>
         
@@ -114,7 +114,7 @@ $stats = $dashboard->get_stats();
                 </div>
             </div>
             
-            <!-- ✅ جديد: تحليل المقالات القديمة -->
+            <!-- ✅ تحليل المقالات القديمة -->
             <div class="action-card" style="border: 2px solid #00a32a;">
                 <h3>
                     <span class="dashicons dashicons-backup"></span>
@@ -136,17 +136,33 @@ $stats = $dashboard->get_stats();
                 </p>
             </div>
             
-            <!-- بناء الروابط -->
+            <!-- ✅ بناء الروابط الداخلية -->
             <div class="action-card">
                 <h3>
                     <span class="dashicons dashicons-admin-links"></span>
-                    بناء الروابط
+                    بناء الروابط الداخلية
                 </h3>
-                <p>إنشاء روابط داخلية ذكية بين المقالات المرتبطة</p>
-                <button type="button" class="button button-secondary" id="odse-build-links">
+                <p>إنشاء روابط داخلية ذكية بين المقالات المرتبطة باستخدام الذكاء الاصطناعي</p>
+                <button type="button" class="button button-secondary button-hero" id="odse-build-links">
                     <span class="dashicons dashicons-admin-links"></span>
                     بناء الروابط الداخلية
                 </button>
+            </div>
+            
+            <!-- ✅ حل تنافس الكلمات تلقائياً -->
+            <div class="action-card" style="border: 2px solid #d63638;">
+                <h3>
+                    <span class="dashicons dashicons-warning"></span>
+                    حل تنافس الكلمات تلقائياً 🤖
+                </h3>
+                <p>يقوم الذكاء الاصطناعي بتحليل التنافسات واختيار المقال الأقوى لكل كلمة مفتاحية</p>
+                <button type="button" class="button button-primary button-hero" id="odse-resolve-conflicts">
+                    <span class="dashicons dashicons-yes-alt"></span>
+                    حل جميع التنافسات تلقائياً
+                </button>
+                <p style="margin-top: 10px; font-size: 12px; color: #666;">
+                    ⚡ حل ذكي: يختار المقال الأقوى بناءً على طول المحتوى، العنوان، التاريخ، والتحليل
+                </p>
             </div>
             
             <!-- كشف التنافس -->
@@ -266,6 +282,10 @@ $stats = $dashboard->get_stats();
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+.dashicons-spin {
+    animation: spin 1s linear infinite;
 }
 
 .bulk-status-info {
